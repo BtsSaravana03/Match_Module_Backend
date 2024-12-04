@@ -1,0 +1,7 @@
+/.vs
+/.vscode
+/Jukebox
+/MatchVideos
+/node_modules
+/package-lock.json
+/start.bat
