@@ -37,8 +37,10 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
                ,cast(ROUND(((405 - SZ_Y) * 71) / 90,0)  as int)  as SZ_Y_CM
                ,ST.BattingTypeID as StBattingTypeID
                ,BR.BowlingTypeID as BwBowlingTypeID
-            FROM SCORECARD S 
-             LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID 
+               ,CMT.DisplayName AS CreaseMovementName
+               ,ST.BattingTypeID AS BatTypeID
+            FROM SCORECARD S
+             LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID
              LEFT JOIN PLAYERS BR ON BR.PLAYERID = S.BOWLERID
              LEFT JOIN PLAYERS DF ON DF.PLAYERID = S.DISMISSALFIELDERID1
@@ -47,6 +49,9 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
              LEFT JOIN BOWLINGSTYLE BS ON BS.Id = S.DeliveryStyle
              LEFT JOIN STROKE SK ON SK.ID = S.STROKETYPE
              LEFT JOIN DISMISSALTYPE DT ON DT.ID = S.DismissalTypeID
+             LEFT JOIN CREASEMOVEMENT CMT ON CMT.Id = S.CreaseMovement
+             JOIN MATCH MT ON MT.ID = S.MATCHID
+             LEFT JOIN STADIUM STD ON STD.ID = MT.StadiumID
              JOIN INNINGS I ON I.INNINGSID = S.INNINGSID AND I.MATCHID = S.MATCHID
                  WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.BALLID ASC;`;
 
