@@ -22,28 +22,29 @@ router.get('/getCompetitions', async (req, res) => {
         res.status(500).send("Error fetching competitions");
     }
 });
+
 router.get('/getMatches/:compid',async (req,res)=>{
     try{
         let q = `
-		SELECT 
+		SELECT
     M.ID AS ID,
     M.COMPETITIONID AS COMP_ID,
     CA.CLUBNAME AS ClubA,
     CB.CLUBNAME AS ClubB,
     CA.CLUBNAME || ' v ' || CB.CLUBNAME AS MatchName,
     M.Date,
-    CA.CLUBNAME || ' v ' || CB.CLUBNAME || ' - ' || 
-    SUBSTR(M.Date, 9, 2) || '/' || 
-    SUBSTR(M.Date, 6, 2) || '/' || 
-    SUBSTR(M.Date, 1, 4) || ', ' || 
+    CA.CLUBNAME || ' v ' || CB.CLUBNAME || ' - ' ||
+    SUBSTR(M.Date, 9, 2) || '/' ||
+    SUBSTR(M.Date, 6, 2) || '/' ||
+    SUBSTR(M.Date, 1, 4) || ', ' ||
     SUBSTR(M.Date, 12, 5) AS MatchNameDate,
     INNINGSCOUNT AS InningsCount,
     KNOCKOUT AS KnockOut
-    FROM 
-        MATCH M 
-        JOIN CLUB CA ON CA.CLUBID = M.CLUBA 
+    FROM
+        MATCH M
+        JOIN CLUB CA ON CA.CLUBID = M.CLUBA
         JOIN CLUB CB ON CB.CLUBID = M.CLUBB
-    WHERE 
+    WHERE
         M.COMPETITIONID = ?;
 	`;
         let result = await new Promise((resolve,reject)=>{
@@ -85,10 +86,12 @@ router.get('/getMatchDetails/:matchid',async(req,res)=>{
         JOIN COMPETITIONS C ON C.ID = M.CompetitionID
         LEFT JOIN STADIUM S ON S.ID = M.STADIUMID
         WHERE M.ID = ?;`;
-        let i = `SELECT I.*,CBT.ClubName as BattingClubName,CBT.Prefix as BattingClubPrefix,CBO.ClubName as BowlingClubName,CBO.Prefix as BowlingClubPrefix FROM INNINGS I 
+
+        let i = `SELECT I.*,CBT.ClubName as BattingClubName,CBT.Prefix as BattingClubPrefix,CBO.ClubName as BowlingClubName,CBO.Prefix as BowlingClubPrefix FROM INNINGS I
 		LEFT JOIN CLUB CBT ON CBT.CLUBID = I.BATTINGCLUBID
 		LEFT JOIN CLUB CBO ON CBO.CLUBID = I.BOWLINGCLUBID
 		WHERE I.MATCHID=?`;
+
         let r = `SELECT MR.*,C.CLUBNAME as ClubName,C.PREFIX AS ClubPrefix FROM MATCHRESULT MR
         LEFT JOIN CLUB C ON C.clubid=MR.CLUBID
         WHERE MR.MATCHID=?`

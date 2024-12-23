@@ -3,7 +3,8 @@ import db from '../dbConfig.js';
 const router = express.Router();
 
 const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME AS BowlerName,I.BattingClubID,I.BowlingClubID,DF.FULLNAME as DismissalFielder1Name
-               ,SUM(S.RUNS + S.EXTRAS+S.PENALTY) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamRuns
+               ,DF2.FullName AS DismissalFielder2Name
+               ,SUM(S.RUNS + S.EXTRAS+ S.PENALTY + S.BLExtras) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamRuns
                ,SUM(S.Dismissal) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamWickets
                ,S.RUNS + CASE WHEN EXTRATYPEID IN (1,2,5) THEN S.EXTRAS ELSE 0 END Bowlruns
                ,CASE WHEN EXTRATYPEID NOT IN (1,2,5) THEN 1 ELSE 0 END Bowlballs
@@ -44,6 +45,7 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID
              LEFT JOIN PLAYERS BR ON BR.PLAYERID = S.BOWLERID
              LEFT JOIN PLAYERS DF ON DF.PLAYERID = S.DISMISSALFIELDERID1
+             LEFT JOIN PLAYERS DF2 ON DF.PLAYERID = S.DISMISSALFIELDERID2
              LEFT JOIN PLAYERS F ON F.PLAYERID = S.FielderID
              LEFT JOIN PLAYERS DB ON DB.PlayerID = S.DismissedBatter
              LEFT JOIN BOWLINGSTYLE BS ON BS.Id = S.DeliveryStyle
@@ -54,6 +56,7 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
              LEFT JOIN STADIUM STD ON STD.ID = MT.StadiumID
              JOIN INNINGS I ON I.INNINGSID = S.INNINGSID AND I.MATCHID = S.MATCHID
                  WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.BALLID ASC;`;
+
 
 router.get('/:matchid', async (req, res) => {
     try {

@@ -9,10 +9,8 @@ router.post('/validate/:username/:password',async (req, res) => {
         let result = await new Promise((resolve, reject) => {
             db.all(q, [req.params.username, req.params.password], (err, rows) => {
                 if (err) {
-                    //res.status = 500;
                     reject({status:500,data:[]});
                 }
-                //res.status(200);
                 let session = crypto.randomBytes(16).toString('base64');
                 resolve({ status: 200, data: rows,session:session });
             })

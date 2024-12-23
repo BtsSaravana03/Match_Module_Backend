@@ -3,9 +3,11 @@ import homeRoute from './routes/home.js';
 import ballbyballRoute from './routes/ballByBall.js';
 import loginRoute from './routes/login.js';
 import cors from 'cors';
+import dotenv from 'dotenv';
 
+dotenv.config();
 const app = express()
-const port = process.env.PORT ||3000;
+const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.static('MatchVideos'));
 
