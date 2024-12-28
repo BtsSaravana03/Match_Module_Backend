@@ -40,6 +40,8 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
                ,BR.BowlingTypeID as BwBowlingTypeID
                ,CMT.DisplayName AS CreaseMovementName
                ,ST.BattingTypeID AS BatTypeID
+               ,I.VideoMode AS InVideoMode
+               ,I.VideoPath As InVideoPath
             FROM SCORECARD S
              LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID

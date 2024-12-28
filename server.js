@@ -2,6 +2,7 @@ import express from 'express';
 import homeRoute from './routes/home.js';
 import ballbyballRoute from './routes/ballByBall.js';
 import loginRoute from './routes/login.js';
+import videoRoute from './routes/video.js';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -15,6 +16,7 @@ app.use(express.static('MatchVideos'));
 app.use('/home',homeRoute);
 app.use('/ballbyball',ballbyballRoute);
 app.use('/login', loginRoute);
+app.use('/video', videoRoute)
 
 app.get('/', (req, res) => {
     return res.send('Match-Module Working');

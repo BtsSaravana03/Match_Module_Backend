@@ -95,6 +95,34 @@ router.get('/getMatchDetails/:matchid',async(req,res)=>{
         let r = `SELECT MR.*,C.CLUBNAME as ClubName,C.PREFIX AS ClubPrefix FROM MATCHRESULT MR
         LEFT JOIN CLUB C ON C.clubid=MR.CLUBID
         WHERE MR.MATCHID=?`
+
+        let info = `SELECT C.Name as Series
+        ,C.Season
+        ,CA.ClubName || ' v ' || CB.ClubName AS MatchName
+        ,S.Name AS Venue
+        ,S.City as City
+        ,strftime('%H:%M', Date) || ' IST' AS Time
+        ,strftime('%Y-%m-%d', Date) AS Date
+        ,MatchOvers
+        ,MT.Description as Format
+        ,TWC.ClubName || ', elected to ' ||case when I.Description='Batting' then 'bat' when I.Description='Fielding' then 'field' end || ' first'  as Toss
+        ,O1.FirstName || ' ' || O1.LastName ||', '|| O2.FirstName || ' ' || O2.LastName AS [Umpires]
+        ,TVO.FirstName || ' ' || TVO.LastName AS [TV Umpire]
+        ,Mref.FirstName || ' ' || Mref.LastName AS [Match Refree]
+        FROM Match M
+        Left join Stadium S on S.ID=M.StadiumId
+        Left join Competitions C on C.ID=M.CompetitionId
+        Left join MatchType MT on MT.ID=M.MatchTypeID
+        Left join Club CA on CA.Clubid=M.ClubA
+        Left join Club CB on CB.Clubid=M.ClubB
+        Left join Innings I on I.Matchid=M.Id and  Tosswin=1
+        Left join Club TWC on TWC.Clubid=I.WinTeam
+        Left join MatchOfficials MO on MO.MatchId=M.Id
+        Left join Officials O1 on O1.Id=MO.Official1Id
+        Left join Officials O2 on O2.Id=MO.Official2Id
+        Left join Officials Mref on Mref.Id=MO.MatchRefId
+        Left join Officials TVO on TVO.Id=MO.TVUmpireId
+        WHERE M.ID = ?`
         let result = [];
         let matchResponse = await getData(q,[req.params.matchid]);
         if(matchResponse?.data?.length>0){
@@ -102,7 +130,9 @@ router.get('/getMatchDetails/:matchid',async(req,res)=>{
             matchResponse.data[0].inningsData = inningsResponse.data||null;
             let matchResult = await getData(r, [req.params.matchid]);
             matchResponse.data[0].result = matchResult.data || null;
-            matchResponse.data[0].MatchComplete = matchResult.data.length>0 ? true : false;
+            matchResponse.data[0].MatchComplete = matchResult.data.length > 0 ? true : false;
+            let matchInfo = await getData(info, [req.params.matchid]);
+            matchResponse.data[0].info = matchInfo.data[0] || null;
             result = matchResponse.data;
         }
         res.send(result);
