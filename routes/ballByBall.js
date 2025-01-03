@@ -42,6 +42,24 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
                ,ST.BattingTypeID AS BatTypeID
                ,I.VideoMode AS InVideoMode
                ,I.VideoPath As InVideoPath
+               ,BO.BattigOrder AS BatOrder
+               ,Case when TB.Over=S.Overid then true else false end  as MultipleBowlers
+               , CASE WHEN MT.MatchTypeID IN (2,5,9,12,15,18,21,36) THEN
+                    CASE
+                        WHEN S.OverID >= 1 AND S.OverID <= 10 THEN '01-10'
+                        WHEN S.OverID >= 11 AND S.OverID <= 20 THEN '11-20'
+                        WHEN S.OverID >= 21 AND S.OverID <= 30 THEN '21-30'
+                        WHEN S.OverID >= 31 AND S.OverID <= 40 THEN '31-40'
+                        WHEN S.OverID >= 41 AND S.OverID <= 50 THEN '41-50'
+                    END
+                WHEN MT.MatchTypeID IN (3,6,10,13,16,19,22,28,31,34,39,40,45,53,54) THEN
+                    CASE
+                        WHEN S.OverID >= 1 AND S.OverID <= 6 THEN '01-06'
+                        WHEN S.OverID >= 7 AND S.OverID <= 10 THEN '07-10'
+                        WHEN S.OverID >= 11 AND S.OverID <= 15 THEN '11-15'
+                        WHEN S.OverID >= 16 AND S.OverID <= 20 THEN '16-20'
+                    END
+            END AS PhaseofPlay
             FROM SCORECARD S
              LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID
@@ -54,16 +72,17 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
              LEFT JOIN STROKE SK ON SK.ID = S.STROKETYPE
              LEFT JOIN DISMISSALTYPE DT ON DT.ID = S.DismissalTypeID
              LEFT JOIN CREASEMOVEMENT CMT ON CMT.Id = S.CreaseMovement
+             LEFT JOIN BATTINGORDER BO ON BO.MatchID = S.MatchId AND BO.InningsID=S.InningsId AND BO.PlayerID = S.StrikerID
              JOIN MATCH MT ON MT.ID = S.MATCHID
              LEFT JOIN STADIUM STD ON STD.ID = MT.StadiumID
              JOIN INNINGS I ON I.INNINGSID = S.INNINGSID AND I.MATCHID = S.MATCHID
+             LEFT JOIN (select MatchId,Inningsid,Overid Over from SCorecard where MatchId=? Group by MatchId,Inningsid,Overid having COunt(distinct Bowlerid)>1) TB on TB.Matchid=S.MatchId and S.Inningsid=TB.Inningsid and Overid=TB.Over
                  WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.BALLID ASC;`;
-
 
 router.get('/:matchid', async (req, res) => {
     try {
         let result = await new Promise((resolve, reject) => {
-            db.all(query, [req.params.matchid,req.params.matchid], (err, rows) => {
+            db.all(query, [req.params.matchid, req.params.matchid, req.params.matchid], (err, rows) => {
                 if (err) {
                     res.status(500);
                     return reject(err);

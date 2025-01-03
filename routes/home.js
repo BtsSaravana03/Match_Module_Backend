@@ -183,4 +183,119 @@ router.get('/getBowlingTypes',async(req,res)=>{
     }
 });
 
+router.get('/getSpellWise/:matchid/:inningsid',async(req,res)=>{
+    try{
+        let q = `WITH OverDetails AS (
+    SELECT
+        overid,
+        bowlerid,
+        LAG(bowlerid, 2) OVER (PARTITION BY matchid, inningsid ORDER BY overid) AS PreviousBowler,
+        matchid,
+        inningsid,
+        CASE
+            WHEN LAG(bowlerid, 2) OVER (PARTITION BY matchid, inningsid ORDER BY overid) = bowlerid
+                 OR LEAD(bowlerid, 2) OVER (PARTITION BY matchid, inningsid ORDER BY overid) = bowlerid
+            THEN 0
+            ELSE DENSE_RANK() OVER (PARTITION BY BowlerID ORDER BY OverID)
+        END AS SpellChange
+    FROM scorecard
+    WHERE matchid = ${req.params.matchid} AND inningsid = ${req.params.inningsid}
+    GROUP BY matchid, inningsid, bowlerid, overid
+),
+Spells AS (
+    SELECT
+        MatchID,
+        InningsID,
+        OverId,
+        BowlerID,
+        DENSE_RANK() OVER (PARTITION BY BowlerID ORDER BY SpellChange) AS SpellCount
+    FROM OverDetails
+)
+SELECT
+    MAX(V.PlayerName) AS PlayerName,
+    ROW_NUMBER() OVER (PARTITION BY S.BowlerID ORDER BY MIN(S.OverID)) AS Spell,
+    COUNT(DISTINCT S.OverID) AS Overs,
+    GROUP_CONCAT(S.OverID, ',') AS OversList,
+    SUM(CASE WHEN (bowlruns = 0 AND endover = 1 AND (bowlballs IN (5, 6, 7))) THEN 1 ELSE 0 END) AS Maiden,
+    SUM(V.Runs) AS Runs,
+    CAST(COALESCE(SUM([4s]), 0) AS TEXT) || '/' || CAST(COALESCE(SUM([6s]), 0) AS TEXT) AS "4s/6s",sum(TeamWkts)Wickets,
+    CAST(SUM(runs) * 1.0 / SUM(TotBalls) * 6 AS NUMERIC(5, 2)) AS Econ
+    --CAST(AVG(CASE WHEN BowlSpeed > 0 THEN BowlSpeed END) AS NUMERIC(8, 2)) AS BowlSpeed
+FROM Spells S
+JOIN (
+    SELECT
+        BowlerID,
+        ROW_NUMBER() OVER (PARTITION BY NULL ORDER BY MIN(OverID)) AS RN
+    FROM ScoreCard
+    WHERE matchid = ${req.params.matchid} AND inningsid = ${req.params.inningsid}
+    GROUP BY BowlerID
+) Rn ON Rn.BowlerID = S.BowlerID
+JOIN (
+    SELECT
+        A.ID,
+        MatchID,
+        InningsID,
+        PlayerName,
+        A.OverID,
+        SUM(TotBalls) AS TotBalls,
+        SUM(Runs + Extras + Penalty + BLExtras) AS Runs,
+        COALESCE(SUM(CASE WHEN runs = 4 THEN 1 ELSE 0 END), 0) AS "4s",
+        COALESCE(SUM(CASE WHEN runs = 6 THEN 1 ELSE 0 END), 0) AS "6s",
+        SUM(Wkt) AS Wickets,
+        SUM(DotBalls) AS DotBall,
+        SUM(NoBall) AS NoBall,
+        SUM(Wide) AS Wide,
+        --AVG(CASE WHEN A.BowlSpeed > 0 THEN A.BowlSpeed END) AS BowlSpeed,
+        SUM(A.bowlballs) AS BowlBalls,
+        SUM(BowlRuns) AS BowlRuns,
+        MAX(A.Endover) AS Endover,
+        sum(TeamWkts) as TeamWkts
+    FROM (
+        SELECT
+            MatchID,
+            InningsID,
+            BowlerID AS ID,
+            FullName AS PlayerName,
+            Endover,
+            OverID,
+            CASE WHEN Extratypeid NOT IN (3, 4, 7) AND runs + extras = 0 THEN 1 ELSE 0 END AS DotBalls,
+            CASE WHEN Extratypeid NOT IN (3, 4) THEN runs ELSE 0 END AS Runs,
+            CASE WHEN Extratypeid NOT IN (1, 2, 5) THEN 1 ELSE 0 END AS TotBalls,
+            CASE WHEN Dismissaltypeid NOT IN (7, 4) THEN 1 ELSE 0 END AS Wkt,
+            CASE WHEN Extratypeid IN (1, 5) THEN 1 ELSE 0 END AS Noball,
+            CASE WHEN Extratypeid IN (2) THEN 1 ELSE 0 END AS Wide,
+            CASE WHEN Extratypeid NOT IN (3, 4, 7) THEN Extras ELSE 0 END AS Extras,
+            CASE WHEN Extratypeid NOT IN (1, 2, 5) THEN 1 ELSE 0 END AS Bowlballs,
+            runs + CASE WHEN Extratypeid IN (1, 2, 5) THEN Extras ELSE 0 END AS Bowlruns,
+            IFNULL(dismissal,0) as TeamWkts,
+            --BowlSpeed,
+            Penalty,
+            BLExtras
+        FROM Scorecard Sc
+        INNER JOIN Players Pl
+            ON Sc.BowlerID = Pl.Playerid
+        WHERE Sc.matchid = ${req.params.matchid} AND Sc.inningsid = ${req.params.inningsid}
+    ) A
+    GROUP BY MatchID, InningsID, ID, PlayerName, A.OverID
+) V ON V.MatchID = S.MatchID AND V.InningsID = S.InningsID AND V.OverID = S.OverID AND V.ID = S.BowlerID
+GROUP BY S.BowlerID, SpellCount
+ORDER BY MIN(RN), MIN(S.OverID);`;
+        let result = await new Promise((resolve,reject)=>{
+            db.all(q,[],(err,rows)=>{
+                if(err){
+                    res.status(500);
+                    return reject(err);
+                }
+                res.status(200);
+                resolve(rows);
+            });
+        })
+        res.send(result);
+    }
+    catch(err){
+        console.error("Error Fetching DismissalType:", err);
+        res.status(500).send("Error Fetching DismissalType");
+    }
+});
+
 export default router;
