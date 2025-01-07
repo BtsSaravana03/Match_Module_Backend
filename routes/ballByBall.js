@@ -43,6 +43,7 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
                ,I.VideoMode AS InVideoMode
                ,I.VideoPath As InVideoPath
                ,BO.BattigOrder AS BatOrder
+               ,NBD.FullName as NonBallDismissalBatter
                ,Case when TB.Over=S.Overid then true else false end  as MultipleBowlers
                , CASE WHEN MT.MatchTypeID IN (2,5,9,12,15,18,21,36) THEN
                     CASE
@@ -68,6 +69,7 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
              LEFT JOIN PLAYERS DF2 ON DF.PLAYERID = S.DISMISSALFIELDERID2
              LEFT JOIN PLAYERS F ON F.PLAYERID = S.FielderID
              LEFT JOIN PLAYERS DB ON DB.PlayerID = S.DismissedBatter
+             LEFT JOIN PLAYERS NBD ON NBD.PlayerID = S.NonBall_dismissBatter
              LEFT JOIN BOWLINGSTYLE BS ON BS.Id = S.DeliveryStyle
              LEFT JOIN STROKE SK ON SK.ID = S.STROKETYPE
              LEFT JOIN DISMISSALTYPE DT ON DT.ID = S.DismissalTypeID

@@ -78,13 +78,15 @@ router.get('/getMatchDetails/:matchid',async(req,res)=>{
         S.City AS City,
         C.Name AS CompFullName,
         C.CompPrefix,
-       MT.InnCount
+       MT.InnCount,
+       P.FullName AS MomPlayerName
         FROM MATCH M
         JOIN CLUB CA ON CA.CLUBID = M.CLUBA
         JOIN CLUB CB ON CB.CLUBID = M.CLUBB
         JOIN MATCHTYPE MT ON MT.ID = M.MATCHTYPEID
         JOIN COMPETITIONS C ON C.ID = M.CompetitionID
         LEFT JOIN STADIUM S ON S.ID = M.STADIUMID
+        LEFT JOIN PLAYERS P ON P.PlayerID = M.MoM
         WHERE M.ID = ?;`;
 
         let i = `SELECT I.*,CBT.ClubName as BattingClubName,CBT.Prefix as BattingClubPrefix,CBO.ClubName as BowlingClubName,CBO.Prefix as BowlingClubPrefix FROM INNINGS I
