@@ -92,7 +92,7 @@ router.get('/getMatchDetails/:matchid',async(req,res)=>{
         let i = `SELECT I.*,CBT.ClubName as BattingClubName,CBT.Prefix as BattingClubPrefix,CBO.ClubName as BowlingClubName,CBO.Prefix as BowlingClubPrefix FROM INNINGS I
 		LEFT JOIN CLUB CBT ON CBT.CLUBID = I.BATTINGCLUBID
 		LEFT JOIN CLUB CBO ON CBO.CLUBID = I.BOWLINGCLUBID
-		WHERE I.MATCHID=?`;
+		WHERE I.MATCHID=? order by inningsid`;
 
         let r = `SELECT MR.*,C.CLUBNAME as ClubName,C.PREFIX AS ClubPrefix FROM MATCHRESULT MR
         LEFT JOIN CLUB C ON C.clubid=MR.CLUBID
@@ -297,6 +297,58 @@ ORDER BY MIN(RN), MIN(S.OverID);`;
     catch(err){
         console.error("Error Fetching DismissalType:", err);
         res.status(500).send("Error Fetching DismissalType");
+    }
+});
+router.get('/getPhaseDataTest/:matchid/:inningsid', async (req, res) => {
+    try {
+        let q = `SELECT Day,Session,
+       SUM(Runs + Extras + Penalty + BlExtras) AS Runs,
+       SUM(CASE WHEN dismissaltypeid NOT IN (7, 8, 14) THEN 1 ELSE 0 END) AS Wkts,
+       CAST (ROUND(SUM(runs + extras) * 100.0 / SUM(bowlballs), 1) AS TEXT) AS [Bat SR],
+       SUM(CASE WHEN runs = 0 AND
+                     extratypeid NOT IN (2) THEN 1 ELSE 0 END) AS [Dot balls],
+       CAST (SUM(CASE WHEN runs = 4 THEN 1 ELSE 0 END) AS TEXT) || '/' || CAST (SUM(CASE WHEN runs = 6 THEN 1 ELSE 0 END) AS TEXT) AS [4s/6s],
+       CAST (SUM(CASE WHEN runs = 1 THEN 1 ELSE 0 END) AS TEXT) || '/' || CAST (SUM(CASE WHEN runs = 2 THEN 1 ELSE 0 END) AS TEXT) || '/' || CAST (SUM(CASE WHEN runs = 3 THEN 1 ELSE 0 END) AS TEXT) AS [1s/2s/3s],
+       CAST (ROUND(SUM(BoundRuns) * 100.0 / SUM(runs), 1) AS TEXT) || ' %' AS [Bound%],
+       CAST (ROUND(SUM(CASE WHEN runs = 0 AND
+                                 extratypeid NOT IN (2) THEN 1 ELSE 0 END) * 100.0 / SUM(bowlballs), 1) AS TEXT) || ' %' AS [Dot%],
+       CAST (SUM(Wd) AS TEXT) || '/' || CAST (SUM(Nb) AS TEXT) AS [Wd/Nb],
+       CAST (SUM(Byes) AS TEXT) || '/' || CAST (SUM([Leg byes]) AS TEXT) AS [Byes/Leg byes],
+       CAST (Max(Teamscore) AS TEXT) || '/' || CAST (Max(TeamWkts) AS TEXT) AS TeamScore
+  FROM (
+           SELECT runs,
+                  Penalty,
+                  BLextras,
+                  extras,
+                  dismissaltypeid,
+                  ballid,
+                  matchid,
+                  inningsid,
+                  Dismissal,
+                  Day,Session,
+                  extratypeid,
+                  CASE WHEN extratypeid NOT IN (1, 2, 5) THEN 1 ELSE 0 END AS bowlballs,
+                  CASE WHEN runs IN (4, 6) THEN runs ELSE 0 END AS BoundRuns,
+                  CASE WHEN extratypeid IN (1, 5) THEN extras ELSE 0 END AS Nb,
+                  CASE WHEN extratypeid = 2 THEN extras ELSE 0 END AS Wd,
+                  CASE WHEN extratypeid = 4 THEN extras ELSE 0 END AS Byes,
+                  CASE WHEN extratypeid = 3 THEN extras ELSE 0 END AS [Leg byes],
+                  sum(IFNULL( (Runs + Extras + Penalty + BlExtras), 0) ) OVER (PARTITION BY s.inningsid ORDER BY s.inningsid,Overs,Ballid) AS Teamscore,
+                  sum(IFNULL( (Dismissal), 0) ) OVER (PARTITION BY s.inningsid ORDER BY s.inningsid, Overs,Ballid) AS TeamWkts
+             FROM scorecard S
+            WHERE matchid = ? AND INNINGSID= ?
+
+       )
+       A
+ GROUP BY Day,Session
+ ORDER BY Day,Session
+`
+        let matchResponse = await getData(q, [req.params.matchid, req.params.inningsid]);
+        res.send(matchResponse);
+    }
+    catch (err) {
+        console.error("Error Fetching getPhaseDataTest:", err);
+        res.status(500).send("Error Fetching getPhaseDataTest");
     }
 });
 

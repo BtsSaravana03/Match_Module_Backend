@@ -2,7 +2,24 @@ import express from 'express';
 import db from '../dbConfig.js';
 const router = express.Router();
 
-const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME AS BowlerName,I.BattingClubID,I.BowlingClubID,DF.FULLNAME as DismissalFielder1Name
+const query = `With LastBall as (
+SELECT MAX(CASE WHEN Sc.Inningsid=1 THEN BallID END)Firstinnlastball,MAX(CASE WHEN Sc.Inningsid=2 THEN BallID END)Secondinnlastball FROM Scorecard SC Where SC.MatchID=?
+
+),
+PartnershipCTE as (
+
+SELECT A.MatchID,A.InningsID,NULLIF(A.PartnerId,B.PartnerId) as PartnerId ,NULLIF(A.Wkt,B.Wkt) AS Wkt,NULLIF(B.Overs,0) AS StartOver,Coalesce(Cast(B.BallID as int)+1,0) AS StartBallID,A.Overs AS [EndOver],A.BallID AS [EndBallID]
+FROM (SELECT MatchID,InningsID,DENSE_RANK() OVER(Partition by InningsID ORDER BY Overs,BallID)Wkt,BallID,Overs,DismissalTypeID
+,CASE WHEN NonStrikerID > StrikerID THEN StrikerID || '-' || NonStrikerID ELSE NonStrikerID || '-' || StrikerID END as PartnerId
+FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.NonBallType in (9,11) or (S.InningsID=1 AND BallID in(select Firstinnlastball from LastBall)) OR(S.InningsID=2 AND BallID in(select Secondinnlastball from LastBall)))
+) A LEFT JOIN
+(SELECT MatchID,InningsID,DENSE_RANK() OVER(Partition by InningsID ORDER BY Overs,BallID)Wkt,BallID,Overs,DismissalTypeID
+,CASE WHEN NonStrikerID > StrikerID THEN StrikerID || '-' || NonStrikerID ELSE NonStrikerID || '-' || StrikerID END as PartnerId
+FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.NonBallType in (9,11) or (S.InningsID=1 AND BallID in(select Firstinnlastball from LastBall)) OR(S.InningsID=2 AND BallID in(select Secondinnlastball from LastBall)))
+) B ON A.MatchID=B.MatchID AND A.InningsID=B.InningsID AND A.Wkt=B.Wkt+1
+)
+
+SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME AS BowlerName,I.BattingClubID,I.BowlingClubID,DF.FULLNAME as DismissalFielder1Name
                ,DF2.FullName AS DismissalFielder2Name
                ,SUM(S.RUNS + S.EXTRAS+ S.PENALTY + S.BLExtras) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamRuns
                ,SUM(S.Dismissal) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamWickets
@@ -60,7 +77,7 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
                         WHEN S.OverID >= 11 AND S.OverID <= 15 THEN '11-15'
                         WHEN S.OverID >= 16 AND S.OverID <= 20 THEN '16-20'
                     END
-            END AS PhaseofPlay
+            END AS PhaseofPlay,NULLIF(PNSp.WKT,0) as PartnerWktOrder
             FROM SCORECARD S
              LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID
@@ -79,12 +96,13 @@ const query = `SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerN
              LEFT JOIN STADIUM STD ON STD.ID = MT.StadiumID
              JOIN INNINGS I ON I.INNINGSID = S.INNINGSID AND I.MATCHID = S.MATCHID
              LEFT JOIN (select MatchId,Inningsid,Overid Over from SCorecard where MatchId=? Group by MatchId,Inningsid,Overid having COunt(distinct Bowlerid)>1) TB on TB.Matchid=S.MatchId and S.Inningsid=TB.Inningsid and Overid=TB.Over
-                 WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.BALLID ASC;`;
+             LEFT JOIN PartnershipCTE PNSP on PNSP.Matchid=S.MatchId and PNSP.InningsID=S.InningsID AND S.BallID BETWEEN Coalesce(PNSP.StartBallID,0) AND Coalesce(PNSP.EndBallID,0)
+              WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.BALLID ASC;`;
 
 router.get('/:matchid', async (req, res) => {
     try {
         let result = await new Promise((resolve, reject) => {
-            db.all(query, [req.params.matchid, req.params.matchid, req.params.matchid], (err, rows) => {
+            db.all(query, [req.params.matchid, req.params.matchid, req.params.matchid, req.params.matchid, req.params.matchid, req.params.matchid], (err, rows) => {
                 if (err) {
                     res.status(500);
                     return reject(err);

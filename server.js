@@ -5,6 +5,8 @@ import loginRoute from './routes/login.js';
 import videoRoute from './routes/video.js';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import os from 'os';
+var hostname = os.hostname();
 
 dotenv.config();
 const app = express()
@@ -16,12 +18,12 @@ app.use(express.static('MatchVideos'));
 app.use('/home',homeRoute);
 app.use('/ballbyball',ballbyballRoute);
 app.use('/login', loginRoute);
-app.use('/video', videoRoute)
+app.use('/video', videoRoute);
 
 app.get('/', (req, res) => {
-    return res.send('Match-Module Working');
+    return res.send({status:true,hostname:hostname});
 })
 
 app.listen(port, () => {
-    console.log(`Server listening at http://localhost:${port}`)
+    console.log(`Server listening at http://${hostname}:${port}`)
 });
