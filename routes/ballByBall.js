@@ -21,8 +21,8 @@ FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.N
 
 SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME AS BowlerName,I.BattingClubID,I.BowlingClubID,DF.FULLNAME as DismissalFielder1Name
                ,DF2.FullName AS DismissalFielder2Name
-               ,SUM(S.RUNS + S.EXTRAS+ S.PENALTY + S.BLExtras) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamRuns
-               ,SUM(S.Dismissal) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY OVERS,BALLID) AS TeamWickets
+               ,SUM(S.RUNS + S.EXTRAS+ IFNULL(p.Penalty, 0) + S.BLExtras) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY s.OVERS,BALLID) AS TeamRuns
+               ,SUM(S.Dismissal) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY s.OVERS,BALLID) AS TeamWickets
                ,S.RUNS + CASE WHEN EXTRATYPEID IN (1,2,5) THEN S.EXTRAS ELSE 0 END Bowlruns
                ,CASE WHEN EXTRATYPEID NOT IN (1,2,5) THEN 1 ELSE 0 END Bowlballs
                ,CASE WHEN DISMISSALTYPEID NOT IN (4,7,8,14,10,0) THEN 1 ELSE 0 END Bowlwkts
@@ -41,7 +41,7 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
                ,SK.DisplayName AS StrokeName
                ,DT.Description AS DismissalTypeDesc
                ,case when S.Nonstrikerid  > S.strikerid  then cast(S.strikerid as varchar(10))||'-'||cast(S.Nonstrikerid as varchar(10)) else cast(S.Nonstrikerid as varchar(10))||'-'||cast(S.strikerid as varchar(10)) end Partnerid
-               ,cast((187 - PM_X) / 1.494  as int)PM_X_CM
+               ,cast((179 - PM_X) / 1.494  as int)PM_X_CM
                ,cast(ROUND(CASE WHEN PM_Y >= 960 THEN PM_Y
                            ELSE  CASE WHEN ((-0.8073 + SQRT((0.65173329 ) - 4 * 0.0000991 * (97.5874 - PM_Y))) / (2 * 0.0000991)) < 450
                                       THEN ((-0.8073 + SQRT((0.65173329) - 4 * 0.0000991 * (97.5874 - PM_Y))) / (2 * 0.0000991)) - 7
@@ -56,10 +56,11 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
                ,ST.BattingTypeID as StBattingTypeID
                ,BR.BowlingTypeID as BwBowlingTypeID
                ,CMT.DisplayName AS CreaseMovementName
+               ,BSM.Description as BatSubjectName
                ,ST.BattingTypeID AS BatTypeID
                ,I.VideoMode AS InVideoMode
                ,I.VideoPath As InVideoPath
-               ,BO.BattigOrder AS BatOrder
+               ,BO.BattingOrder AS BatOrder
                ,NBD.FullName as NonBallDismissalBatter
                ,Case when TB.Over=S.Overid then true else false end  as MultipleBowlers
                , CASE WHEN MT.MatchTypeID IN (2,5,9,12,15,18,21,36) THEN
@@ -78,6 +79,9 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
                         WHEN S.OverID >= 16 AND S.OverID <= 20 THEN '16-20'
                     END
             END AS PhaseofPlay,NULLIF(PNSp.WKT,0) as PartnerWktOrder
+            ,CASE WHEN ',' || S.Batsman || ',' LIKE '%,5,%' THEN 1 
+              ELSE 0 
+            END AS Uncomfortable,ifnull(p.Penalty,0) as Penalty1
             FROM SCORECARD S
              LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID
@@ -91,13 +95,15 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
              LEFT JOIN STROKE SK ON SK.ID = S.STROKETYPE
              LEFT JOIN DISMISSALTYPE DT ON DT.ID = S.DismissalTypeID
              LEFT JOIN CREASEMOVEMENT CMT ON CMT.Id = S.CreaseMovement
+             LEFT JOIN BATSUBJECTMASTER BSM ON BSM.Id = S.BatSubject
              LEFT JOIN BATTINGORDER BO ON BO.MatchID = S.MatchId AND BO.InningsID=S.InningsId AND BO.PlayerID = S.StrikerID
              JOIN MATCH MT ON MT.ID = S.MATCHID
              LEFT JOIN STADIUM STD ON STD.ID = MT.StadiumID
              JOIN INNINGS I ON I.INNINGSID = S.INNINGSID AND I.MATCHID = S.MATCHID
+             left JOIN Penalty p ON p.INNINGSID = S.INNINGSID AND p.MATCHID = S.MATCHID and p.overs = s.Overs
              LEFT JOIN (select MatchId,Inningsid,Overid Over from SCorecard where MatchId=? Group by MatchId,Inningsid,Overid having COunt(distinct Bowlerid)>1) TB on TB.Matchid=S.MatchId and S.Inningsid=TB.Inningsid and Overid=TB.Over
              LEFT JOIN PartnershipCTE PNSP on PNSP.Matchid=S.MatchId and PNSP.InningsID=S.InningsID AND S.BallID BETWEEN Coalesce(PNSP.StartBallID,0) AND Coalesce(PNSP.EndBallID,0)
-              WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.BALLID ASC;`;
+              WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.OverId,S.Overs,S.BALLID ASC;`;
 
 router.get('/:matchid', async (req, res) => {
     try {
