@@ -3,26 +3,25 @@ import db from '../dbConfig.js';
 const router = express.Router();
 
 const query = `With LastBall as (
-SELECT MAX(CASE WHEN Sc.Inningsid=1 THEN BallID END)Firstinnlastball,MAX(CASE WHEN Sc.Inningsid=2 THEN BallID END)Secondinnlastball FROM Scorecard SC Where SC.MatchID=?
-
+SELECT MAX(CASE WHEN Sc.Inningsid=1 THEN SC.BallID END)Firstinnlastball,MAX(CASE WHEN Sc.Inningsid=2 THEN SC.BallID END)Secondinnlastball FROM Scorecard SC Where SC.MatchID=?
 ),
 PartnershipCTE as (
 
 SELECT A.MatchID,A.InningsID,NULLIF(A.PartnerId,B.PartnerId) as PartnerId ,NULLIF(A.Wkt,B.Wkt) AS Wkt,NULLIF(B.Overs,0) AS StartOver,Coalesce(Cast(B.BallID as int)+1,0) AS StartBallID,A.Overs AS [EndOver],A.BallID AS [EndBallID]
-FROM (SELECT MatchID,InningsID,DENSE_RANK() OVER(Partition by InningsID ORDER BY Overs,BallID)Wkt,BallID,Overs,DismissalTypeID
+FROM (SELECT MatchID,InningsID,DENSE_RANK() OVER(Partition by InningsID ORDER BY Overs,S.BallID)Wkt,BallID,Overs,DismissalTypeID
 ,CASE WHEN NonStrikerID > StrikerID THEN StrikerID || '-' || NonStrikerID ELSE NonStrikerID || '-' || StrikerID END as PartnerId
-FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.NonBallType in (9,11) or (S.InningsID=1 AND BallID in(select Firstinnlastball from LastBall)) OR(S.InningsID=2 AND BallID in(select Secondinnlastball from LastBall)))
+FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.NonBallType in (9,11) or (S.InningsID=1 AND BallID in(select Firstinnlastball from LastBall)) OR(S.InningsID=2 AND S.BallID in(select Secondinnlastball from LastBall)))
 ) A LEFT JOIN
-(SELECT MatchID,InningsID,DENSE_RANK() OVER(Partition by InningsID ORDER BY Overs,BallID)Wkt,BallID,Overs,DismissalTypeID
+(SELECT MatchID,InningsID,DENSE_RANK() OVER(Partition by InningsID ORDER BY Overs,S.BallID)Wkt,BallID,Overs,DismissalTypeID
 ,CASE WHEN NonStrikerID > StrikerID THEN StrikerID || '-' || NonStrikerID ELSE NonStrikerID || '-' || StrikerID END as PartnerId
-FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.NonBallType in (9,11) or (S.InningsID=1 AND BallID in(select Firstinnlastball from LastBall)) OR(S.InningsID=2 AND BallID in(select Secondinnlastball from LastBall)))
+FROM Scorecard S Where S.MatchID=?  AND (S.DismissalTypeID NOT IN(7,8,14) or S.NonBallType in (9,11) or (S.InningsID=1 AND BallID in(select Firstinnlastball from LastBall)) OR(S.InningsID=2 AND S.BallID in(select Secondinnlastball from LastBall)))
 ) B ON A.MatchID=B.MatchID AND A.InningsID=B.InningsID AND A.Wkt=B.Wkt+1
 )
 
 SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME AS BowlerName,I.BattingClubID,I.BowlingClubID,DF.FULLNAME as DismissalFielder1Name
                ,DF2.FullName AS DismissalFielder2Name
-               ,SUM(S.RUNS + S.EXTRAS+ IFNULL(p.Penalty, 0) + S.BLExtras) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY s.OVERS,BALLID) AS TeamRuns
-               ,SUM(S.Dismissal) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY s.OVERS,BALLID) AS TeamWickets
+               ,SUM(S.RUNS + S.EXTRAS+ IFNULL(p.Penalty, 0) + S.BLExtras) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY s.OVERS,S.BALLID) AS TeamRuns
+               ,SUM(S.Dismissal) OVER(PARTITION BY S.MATCHID,S.INNINGSID ORDER BY s.OVERS,S.BALLID) AS TeamWickets
                ,S.RUNS + CASE WHEN EXTRATYPEID IN (1,2,5) THEN S.EXTRAS ELSE 0 END Bowlruns
                ,CASE WHEN EXTRATYPEID NOT IN (1,2,5) THEN 1 ELSE 0 END Bowlballs
                ,CASE WHEN DISMISSALTYPEID NOT IN (4,7,8,14,10,0) THEN 1 ELSE 0 END Bowlwkts
@@ -31,10 +30,10 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
                ,F.FullName as FielderName
                ,CASE WHEN DISMISSALTYPEID NOT IN (4,7,8,14,10,0) THEN 1 ELSE 0 END Batwkts
                ,(select SUM(CASE WHEN (bowlruns=0 and endover=1 and (bowlballs=7  or bowlballs=6 or bowlballs=5)) THEN 1 ELSE 0 END)
-                   from (select MatchId,InningsId,OverId,Max(Endover)Endover
+                   from (select MatchId,InningsId,s.OverId,Max(Endover)Endover
                          ,Sum(RUNS + CASE WHEN EXTRATYPEID IN (1,2,5) THEN EXTRAS ELSE 0 END) as BowlRuns
                          ,Sum(CASE WHEN EXTRATYPEID NOT IN (1,2,5) THEN 1 ELSE 0 END) Bowlballs
-                         from Scorecard where MATCHID=? Group by  MatchId,InningsId,OverId
+                         from Scorecard s where MATCHID=? Group by  MatchId,InningsId,s.OverId
                          )V where S.MatchID=V.MatchID and S.InningsID=V.InningsID and S.OverID=V.OverID  Group by  MatchId,InningsId,OverId ) as [Maiden]
                ,BS.DisplayName AS DeliveryStyleName
                ,BS.SpinOrPace
@@ -81,7 +80,8 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
             END AS PhaseofPlay,NULLIF(PNSp.WKT,0) as PartnerWktOrder
             ,CASE WHEN ',' || S.Batsman || ',' LIKE '%,5,%' THEN 1 
               ELSE 0 
-            END AS Uncomfortable,ifnull(p.Penalty,0) as Penalty1
+            END AS Uncomfortable,ifnull(p.Penalty,0) as Penalty1 , AT.LengthX as PM_X_CM_Hauk,AT.LengthY as PM_Y_CM_Hauk, AT.HeightX as SZ_X_CM_Batter, AT.HeightY as SZ_Y_CM_Batter, AT.StumpHeightX as SZ_X_CM_Stump, AT.StumpHeightY as SZ_Y_CM_Stump,AT.CreaseHeightX as SZ_X_CM_crease, AT.CreaseHeightY as SZ_Y_CM_Crease,AT.RPX AS RPX_H,AT.RPY AS RPY_H, AT.Swing  AS Swing_H, AT.Deviation AS Deviation_H, AT.ReactionTime_to_Crease AS ReactionTime_to_Crease_H, AT.ReactionTime_to_interception AS ReactionTime_to_interception_H,AT.IPX_CM AS IPX_CM_H,ABS(ROUND(405 - ((NULLIF(AT.HeightY,-99990) * 90) / 71),0))  AS IPY_CM_H, AT.ReleaseSpeed AS ReleaseSpeed ,AT.StumpHeightY AS BounsHeight,AT.DIP AS Dip
+            ,CASE WHEN S.BatSubject=5 or S.BatSubject like '%5%' OR S.ShotConnection IN (1,2,3,4,5,11,12)  THEN 1 ELSE 0 END AS [FS]
             FROM SCORECARD S
              LEFT JOIN PLAYERS ST on ST.PLAYERID=S.STRIKERID
              LEFT JOIN PLAYERS NST ON NST.PLAYERID = S.NONSTRIKERID
@@ -101,8 +101,9 @@ SELECT S.*,ST.FULLNAME as StrikerName,NST.FULLNAME AS NonStrikerName,BR.FULLNAME
              LEFT JOIN STADIUM STD ON STD.ID = MT.StadiumID
              JOIN INNINGS I ON I.INNINGSID = S.INNINGSID AND I.MATCHID = S.MATCHID
              left JOIN Penalty p ON p.INNINGSID = S.INNINGSID AND p.MATCHID = S.MATCHID and p.overs = s.Overs
-             LEFT JOIN (select MatchId,Inningsid,Overid Over from SCorecard where MatchId=? Group by MatchId,Inningsid,Overid having COunt(distinct Bowlerid)>1) TB on TB.Matchid=S.MatchId and S.Inningsid=TB.Inningsid and Overid=TB.Over
+             LEFT JOIN (select MatchId,Inningsid,s.Overid Over from SCorecard s where MatchId=? Group by MatchId,Inningsid,Overid having COunt(distinct Bowlerid)>1) TB on TB.Matchid=S.MatchId and S.Inningsid=TB.Inningsid and S.Overid=TB.Over
              LEFT JOIN PartnershipCTE PNSP on PNSP.Matchid=S.MatchId and PNSP.InningsID=S.InningsID AND S.BallID BETWEEN Coalesce(PNSP.StartBallID,0) AND Coalesce(PNSP.EndBallID,0)
+             LEFT JOIN Advancetracking AT on AT.MatchID = S.MatchId and AT.BallID = S.BALLID and AT.InningsID =  S.INNINGSID 
               WHERE S.MATCHID=? ORDER BY S.INNINGSID ASC,S.OverId,S.Overs,S.BALLID ASC;`;
 
 router.get('/:matchid', async (req, res) => {
