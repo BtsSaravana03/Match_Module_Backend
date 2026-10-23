@@ -22,7 +22,6 @@ router.get('/getCompetitions', async (req, res) => {
         res.status(500).send("Error fetching competitions");
     }
 });
-
 router.get('/getMatches/:compid',async (req,res)=>{
     try{
         let q = `
@@ -192,7 +191,6 @@ router.get('/getBowlingTypes',async(req,res)=>{
         res.status(500).send("Error Fetching BowlingTypes");
     }
 });
-
 router.get('/getSpellWise/:matchid/:inningsid',async(req,res)=>{
     try{
         let q = `WITH ConsecutiveOvers AS (
@@ -491,7 +489,6 @@ router.get('/getOverComparison/:matchid', async (req, res) => {
         res.status(500).send("Error Fetching getOverComparisonData");
     }
 });
-
 router.get('/getOverComparisonTest3rd4th/:matchid', async (req, res) => {
     try {
         let q = `SELECT
@@ -591,5 +588,7 @@ router.get('/getOverComparisonTest3rd4th/:matchid', async (req, res) => {
         res.status(500).send("Error Fetching getOverComparisontest3rd4thData");
     }
 });
+
+
 
 export default router;
